@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
+import contextlib
+import uuid
 
 # Konfigurasi Halaman (Wide Layout)
 st.set_page_config(
@@ -10,24 +12,62 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CUSTOM CSS: BACKGROUND GLOBAL LIGHT GREY & STICKY FILTER PUTIH ---
+# --- DEFINISI MVP: FULL-WIDTH FIXED CONTAINER ---
+@contextlib.contextmanager
+def fixed_container(y=0, y_unit="px", background_color="#FFFFFF"):
+    unique_id = str(uuid.uuid4()).replace("-", "")[:8]
+    container_key = f"fixed_box_{unique_id}"
+    
+    y_val = f"{y}{y_unit}" if isinstance(y, (int, float)) else y
+    
+    st.markdown(f"""
+        <style>
+        /* Background halaman utama light grey */
+        .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], .main {{
+            background-color: #F8FAFC !important;
+        }}
+        
+        [data-testid="stMainBlockContainer"], .block-container {{
+            padding-top: 1rem !important;
+            background-color: #F8FAFC !important;
+        }}
+
+        /* Styling Full-Width Fixed Container (Filter Bar di Atas) */
+        div.st-key-{container_key} {{
+            position: fixed !important;
+            top: {y_val} !important;
+            left: 50% !important;
+            right: 50% !important;
+            margin-left: -50vw !important;
+            margin-right: -50vw !important;
+            width: 100vw !important;
+            z-index: 999999 !important;
+            background-color: {background_color} !important;
+            padding: 14px max(calc((100vw - 1440px) / 2 + 32px), 32px) !important;
+            border-radius: 0px 0px 12px 12px !important;
+            border-bottom: 1px solid #E2E8F0 !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+            box-sizing: border-box !important;
+        }}
+        </style>
+    """, unsafe_allow_html=True)
+    
+    with st.container(key=container_key):
+        yield
+
+# --- CUSTOM CSS GLOBAL UNTUK MEMASTIKAN CARDS TETAP PUTIH ---
 st.markdown("""
     <style>
-    /* 1. Set Background Global Aplikasi Menjadi Light Grey */
-    .stApp, [data-testid="stAppViewContainer"], .main {
-        background-color: #F8FAFC !important;
-    }
-    
     [data-testid="stHeader"] {
         background-color: #FFFFFF !important;
     }
     
     .main .block-container {
         max-width: 1440px;
-        padding-top: 1rem !important;
         padding-right: 32px;
         padding-left: 32px;
         margin: 0 auto;
+        overflow: visible !important;
     }
 
     html, body, [class*="css"] {
@@ -36,35 +76,11 @@ st.markdown("""
         color: #1E293B;
     }
 
-    /* 2. Sticky hanya pada container filter.
-       Key class Streamlit dipasang langsung pada container yang dibuat
-       dengan st.container(key="filter_bar"). Marker dipakai sebagai
-       pengaman agar styling hanya aktif pada container yang benar. */
-    .st-key-filter_bar:has(.fixed-filter-marker) {
-        position: -webkit-sticky !important;
-        position: sticky !important;
-        top: 0 !important;
-        z-index: 999 !important;
-        background-color: #FFFFFF !important;
-        padding: 12px 32px 14px 32px !important;
-        margin-left: -32px !important;
-        margin-right: -32px !important;
-        width: calc(100% + 64px) !important;
-        box-sizing: border-box !important;
-        border-bottom: 1px solid #E2E8F0 !important;
-        box-shadow: 0 3px 6px -2px rgba(0, 0, 0, 0.05) !important;
-    }
-
-    .fixed-filter-marker {
-        height: 0;
-        margin: 0;
-        padding: 0;
-    }
-
-    /* 3. Styling Card Konten Utama (Berlatar Putih di atas Light Grey) */
+    /* Memastikan seluruh Card & Metric Box BERWARNA PUTIH SOLID */
     .st-key-card_sov_pamasuka, .st-key-card_kategori, .st-key-card_sentimen,
     .st-key-card_sul, .st-key-card_kal, .st-key-card_puma, .st-key-card_tabel,
-    .st-key-metric_box {
+    [class*="st-key-metric_box_"],
+    [data-testid="stContainer"][data-baseweb="block"] {
         background-color: #FFFFFF !important;
         border: 1px solid #E2E8F0 !important;
         border-radius: 12px !important;
@@ -177,18 +193,10 @@ df = load_data(SHEET_CSV_URL)
 if not st.session_state.history_state:
     save_current_state()
 
-# --- HEADER JUDUL (TIDAK STICKY) ---
-col_head1, col_head2 = st.columns([3, 1])
-with col_head1:
-    st.title("Media monitoring")
-    st.markdown("<p style='color: #64748B; font-size: 13px; margin-top: -10px; margin-bottom: 15px;'>Pantau pemberitaan operator dan distribusi eksposur di wilayah Pamasuka.</p>", unsafe_allow_html=True)
-with col_head2:
-    st.markdown("<p style='text-align: right; font-size: 12px; color: #64748B;'>Sulawesi · Kalimantan · Papua & Maluku</p>", unsafe_allow_html=True)
-
-# --- HANYA FILTER BAR YANG STICKY ---
-with st.container(key="filter_bar"):
-    # Marker khusus untuk menandai area filter sebagai sticky header.
-    st.markdown("<div class='fixed-filter-marker'></div>", unsafe_allow_html=True)
+# =========================================================================
+# 1. FILTER BAR FULL-WIDTH (MENEMPEL TEPAT DI ATAS / `y=0`)
+# =========================================================================
+with fixed_container(y=0):
     st.markdown("<div style='font-size: 13px; font-weight: 600; color: #0F172A; margin-bottom: 6px;'>🔍 Filter Data Berita</div>", unsafe_allow_html=True)
     f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns([2.0, 1.5, 2.6, 0.7, 0.7])
 
@@ -207,7 +215,7 @@ with st.container(key="filter_bar"):
         with c_op2: chk_xl = st.checkbox("XLSmart", key="op_xlsmart")
         with c_op3: chk_isat = st.checkbox("Indosat", key="op_indosat")
         with c_op4: chk_other = st.checkbox("Lainnya", key="op_lainnya")
-
+        
         operators = []
         if chk_tsel: operators.append("Telkomsel")
         if chk_xl: operators.append("XLSmart")
@@ -254,8 +262,21 @@ def handle_pie_click(event_selection, region_name="Area"):
             save_current_state()
             st.rerun()
 
-# --- AREA KONTEN BAWAH (OTOMATIS BERADA DI ATAS BACKGROUND LIGHT GREY) ---
-st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
+# --- SPACING AGAR KONTEN DI BAWAH TIDAK TERTUTUP FIXED CONTAINER ATAS ---
+st.markdown("<div style='margin-top: 140px;'></div>", unsafe_allow_html=True)
+
+# =========================================================================
+# 2. HEADER JUDUL DASHBOARD (BERADA DI BAWAH FILTER BAR)
+# =========================================================================
+col_head1, col_head2 = st.columns([3, 1])
+with col_head1:
+    st.title("Media monitoring")
+    st.markdown("<p style='color: #64748B; font-size: 13px; margin-top: -10px; margin-bottom: 15px;'>Pantau pemberitaan operator dan distribusi eksposur di wilayah Pamasuka.</p>", unsafe_allow_html=True)
+with col_head2:
+    st.markdown("<p style='text-align: right; font-size: 12px; color: #64748B;'>Sulawesi · Kalimantan · Papua & Maluku</p>", unsafe_allow_html=True)
+
+# --- AREA KONTEN BAWAH ---
+st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
 
 col_info_title, col_info_note = st.columns([3, 1])
 with col_info_title:
